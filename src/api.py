@@ -1,31 +1,48 @@
 """
 FastAPI application for the Board Game Recommendation System.
-Provides REST API endpoints with automatic Swagger documentation.
+Provides simplified REST API with only 2 endpoints.
 """
 
 import os
 import sys
 import pandas as pd
+import json
 from fastapi import FastAPI, HTTPException, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from typing import Optional
 import logging
+from dotenv import load_dotenv
+from google import genai
+from google.genai import types
 
 # Add current directory to path for imports
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from data_preprocessor import BoardGameDataPreprocessor
 from recommendation_engine import BoardGameRecommender
-from api_models import (
-    RecommendationRequest, SimilarGamesRequest, RecommendationResponse, 
-    SimilarGamesResponse, MechanicsResponse, DomainsResponse, HealthResponse,
-    ErrorResponse, GameInfo, SortOption
-)
+from api_models import RecommendationResponse, GameInfo, SortOption
+
+# Load environment variables
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Configure Gemini client
+gemini_api_key = os.getenv('GEMINI_API_KEY')
+if not gemini_api_key or gemini_api_key == 'your_gemini_api_key_here':
+    logger.warning("GEMINI_API_KEY not set. Natural language queries will not work.")
+    gemini_client = None
+else:
+    try:
+        # Create Gemini client using the new SDK
+        gemini_client = genai.Client(api_key=gemini_api_key)
+        logger.info("Gemini client initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize Gemini client: {e}")
+        gemini_client = None
 
 # Global recommendation system instance
 recommendation_system = None
@@ -34,25 +51,28 @@ recommendation_system = None
 app = FastAPI(
     title="Board Game Recommendation API",
     description="""
-    ## AI-Powered Board Game Recommendation System
+    ## AI-Powered Board Game Recommendation API
     
-    This API provides intelligent board game recommendations based on your preferences.
+    This API provides intelligent board game recommendations with just 2 endpoints:
+    
+    ### Endpoints:
+    1. **GET /recommendations** - Filter-based recommendations using query parameters
+    2. **GET /query** - AI-powered natural language query recommendations
     
     ### Features:
-    - **Filter-based recommendations**: Find games based on player count, duration, complexity, and more
-    - **Similarity-based recommendations**: Discover games similar to ones you already enjoy
-    - **Browse game metadata**: Explore popular mechanics and domains
-    - **Comprehensive game database**: Access to 20,000+ board games from BoardGameGeek
+    - **20,000+ board games** from BoardGameGeek database
+    - **Smart filtering** by player count, duration, complexity, and rating
+    - **Google Gemini AI** for advanced natural language understanding
+    - **Fallback parsing** when AI is unavailable
+    - **Comprehensive game data** including ratings, mechanics, and more
     
-    ### How to use:
-    1. Use `/recommendations` endpoint for personalized game suggestions
-    2. Use `/similar` endpoint to find games similar to a specific title
-    3. Browse `/mechanics` and `/domains` to see available filters
-    4. Check `/health` to verify the system status
-    
-    All endpoints return detailed game information including ratings, complexity, player counts, and more.
+    ### AI Query Examples:
+    - "I want a strategic but easy game for 3 players"
+    - "Find me a quick party game for 6 people under 30 minutes"
+    - "Suggest complex strategy games for 2 players with high ratings"
+    - "Family-friendly games with dice rolling for 4 players"
     """,
-    version="1.0.0",
+    version="2.0.0",
     docs_url="/docs",
     redoc_url="/redoc"
 )
@@ -146,182 +166,137 @@ def convert_game_to_info(game_row) -> GameInfo:
         complexity_average=float(game_row.get('Complexity Average')) if pd.notna(game_row.get('Complexity Average')) else None,
         bgg_rank=int(game_row.get('BGG Rank')) if pd.notna(game_row.get('BGG Rank')) else None,
         mechanics=str(game_row.get('Mechanics', '')) if pd.notna(game_row.get('Mechanics')) else None,
-        domains=str(game_row.get('Domains', '')) if pd.notna(game_row.get('Domains')) else None,
-        similarity_score=float(game_row.get('Similarity_Score')) if pd.notna(game_row.get('Similarity_Score')) else None
+        domains=str(game_row.get('Domains', '')) if pd.notna(game_row.get('Domains')) else None
     )
 
 
-@app.get("/health", response_model=HealthResponse, tags=["System"])
-async def health_check():
-    """
-    Check the health and status of the recommendation system.
+def parse_natural_language_query_with_gemini(query: str) -> tuple[dict, str]:
+    """Parse natural language query using Google Gemini."""
+    if not gemini_client:
+        # Fallback to simple parsing if Gemini is not available
+        return parse_natural_language_query_fallback(query)
     
-    Returns system status and database information.
-    """
     try:
-        system = get_recommendation_system()
-        return HealthResponse(
-            status="healthy",
-            system_ready=system.is_ready,
-            games_loaded=system.games_count
-        )
-    except Exception as e:
-        return HealthResponse(
-            status="unhealthy",
-            system_ready=False,
-            games_loaded=0
-        )
-
-
-@app.post("/recommendations", response_model=RecommendationResponse, tags=["Recommendations"])
-async def get_recommendations(
-    request: RecommendationRequest,
-    system: RecommendationSystem = Depends(get_recommendation_system)
-):
-    """
-    Get personalized board game recommendations based on your preferences.
-    
-    Filter games by various criteria including:
-    - Number of players
-    - Play duration
-    - Complexity level
-    - Minimum rating
-    - Age appropriateness
-    - Game mechanics and domains
-    
-    Returns a list of games matching your criteria, sorted by the specified field.
-    """
-    try:
-        # Extract request parameters
-        params = request.dict(exclude_none=True)
-        sort_by = params.pop('sort_by', 'Rating Average')
+        model_name = os.getenv('GEMINI_MODEL', 'gemini-1.5-flash')
+        temperature = float(os.getenv('GEMINI_TEMPERATURE', '0.3'))
         
-        # Get recommendations
-        recommendations = system.recommender.recommend_games(
-            sort_by=sort_by,
-            **params
-        )
-        
-        if recommendations.empty:
-            raise HTTPException(
-                status_code=404, 
-                detail="No games found matching your criteria. Try relaxing some filters."
+        prompt = f"""
+You are a board game recommendation assistant. Parse the following user query and extract filter parameters for board game recommendations.
+
+User query: "{query}"
+
+Please respond with ONLY a valid JSON object containing the extracted filters. Use these exact field names and value types:
+
+{{
+  "num_players": integer or null,
+  "duration_min": integer (minutes) or null,
+  "duration_max": integer (minutes) or null, 
+  "complexity_min": float (1.0-5.0) or null,
+  "complexity_max": float (1.0-5.0) or null,
+  "min_rating": float (0.0-10.0) or null,
+  "max_age": integer or null,
+  "mechanics": array of strings or null,
+  "domains": array of strings or null,
+  "n_recommendations": integer (default 10),
+  "sort_by": "Rating Average" (default),
+  "interpretation": "human-readable description of what was understood"
+}}
+
+Guidelines:
+- For complexity: easy/simple/light = max 2.5, medium = 2.0-3.5, complex/heavy = min 3.5
+- For duration: quick/fast/short = max 45min, long = min 90min
+- For rating: good/popular = min 7.0, best/top/excellent = min 8.0
+- Common domains: "Strategy Games", "Family Games", "Party Games", "Thematic Games"
+- Common mechanics: "Dice Rolling", "Hand Management", "Worker Placement", "Card Drafting", "Cooperative Game"
+- Set num_players to the exact number mentioned (e.g., "3 players" = 3)
+- For age, extract maximum recommended age if mentioned
+
+Only respond with the JSON object, no other text.
+"""
+
+        # Use the new SDK to generate content
+        response = gemini_client.models.generate_content(
+            model=model_name,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=temperature,
+                max_output_tokens=500,
+                response_modalities=['TEXT']
             )
-        
-        # Convert to response format
-        games = [convert_game_to_info(row) for _, row in recommendations.iterrows()]
-        
-        # Filter out None values for filters_applied
-        filters_applied = {k: v for k, v in request.dict().items() if v is not None and k not in ['n_recommendations', 'sort_by']}
-        
-        return RecommendationResponse(
-            games=games,
-            total_found=len(games),
-            filters_applied=filters_applied
         )
         
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting recommendations: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/similar", response_model=SimilarGamesResponse, tags=["Recommendations"])
-async def get_similar_games(
-    request: SimilarGamesRequest,
-    system: RecommendationSystem = Depends(get_recommendation_system)
-):
-    """
-    Find board games similar to a specific game.
-    
-    Uses machine learning to analyze game features and find the most similar games
-    based on mechanics, themes, complexity, and other characteristics.
-    
-    Perfect for discovering new games if you enjoyed a particular title.
-    """
-    try:
-        similar_games = system.recommender.get_similar_games(
-            game_name=request.game_name,
-            n_recommendations=request.n_recommendations
-        )
+        # Parse the JSON response
+        response_text = response.text.strip()
         
-        if similar_games.empty:
-            raise HTTPException(
-                status_code=404,
-                detail=f"No game found matching '{request.game_name}'. Try a different name or check spelling."
-            )
+        # Remove any markdown code blocks if present
+        if response_text.startswith('```json'):
+            response_text = response_text[7:]
+        if response_text.startswith('```'):
+            response_text = response_text[3:]
+        if response_text.endswith('```'):
+            response_text = response_text[:-3]
+            
+        parsed_response = json.loads(response_text.strip())
         
-        # Convert to response format
-        games = [convert_game_to_info(row) for _, row in similar_games.iterrows()]
+        # Extract interpretation and remove it from filters
+        interpretation = parsed_response.pop('interpretation', f"Processed query: {query}")
         
-        return SimilarGamesResponse(
-            target_game=request.game_name,
-            similar_games=games,
-            total_found=len(games)
-        )
+        # Clean up the filters (remove null values)
+        filters = {k: v for k, v in parsed_response.items() if v is not None}
         
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting similar games: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/mechanics", response_model=MechanicsResponse, tags=["Browse"])
-async def get_popular_mechanics(
-    top_n: int = Query(20, ge=1, le=100, description="Number of top mechanics to return"),
-    system: RecommendationSystem = Depends(get_recommendation_system)
-):
-    """
-    Get the most popular board game mechanics.
-    
-    Mechanics describe how games are played (e.g., "Dice Rolling", "Worker Placement").
-    Use this endpoint to see available mechanics for filtering recommendations.
-    
-    Returns mechanics ordered by popularity in the database.
-    """
-    try:
-        mechanics = system.recommender.get_popular_mechanics(top_n)
-        
-        return MechanicsResponse(
-            mechanics=mechanics,
-            total_count=len(mechanics)
-        )
+        logger.info(f"Gemini parsed query '{query}' -> filters: {filters}")
+        return filters, interpretation
         
     except Exception as e:
-        logger.error(f"Error getting mechanics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.warning(f"Gemini parsing failed for query '{query}': {e}. Using fallback.")
+        return parse_natural_language_query_fallback(query)
 
 
-@app.get("/domains", response_model=DomainsResponse, tags=["Browse"])
-async def get_popular_domains(
-    top_n: int = Query(10, ge=1, le=50, description="Number of top domains to return"),
-    system: RecommendationSystem = Depends(get_recommendation_system)
-):
-    """
-    Get the most popular board game domains (categories).
+def parse_natural_language_query_fallback(query: str) -> tuple[dict, str]:
+    """Fallback parsing when Gemini is not available."""
+    filters = {
+        'n_recommendations': 10,
+        'sort_by': 'Rating Average'
+    }
     
-    Domains describe broad game categories (e.g., "Strategy Games", "Family Games").
-    Use this endpoint to see available domains for filtering recommendations.
+    query_lower = query.lower()
+    interpretation_parts = []
     
-    Returns domains ordered by popularity in the database.
-    """
-    try:
-        domains = system.recommender.get_popular_domains(top_n)
+    # Simple keyword extraction
+    if any(word in query_lower for word in ['strategy', 'strategic']):
+        filters['domains'] = ['Strategy Games']
+        interpretation_parts.append("strategy games")
         
-        return DomainsResponse(
-            domains=domains,
-            total_count=len(domains)
-        )
+    if any(word in query_lower for word in ['family', 'kids']):
+        filters['domains'] = ['Family Games'] 
+        interpretation_parts.append("family games")
         
-    except Exception as e:
-        logger.error(f"Error getting domains: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    if any(word in query_lower for word in ['easy', 'simple', 'light']):
+        filters['complexity_max'] = 2.5
+        interpretation_parts.append("easy complexity")
+        
+    if any(word in query_lower for word in ['complex', 'heavy', 'difficult']):
+        filters['complexity_min'] = 3.5
+        interpretation_parts.append("complex games")
+        
+    if any(word in query_lower for word in ['quick', 'fast', 'short']):
+        filters['duration_max'] = 45
+        interpretation_parts.append("quick games")
+        
+    # Extract player count
+    import re
+    player_match = re.search(r'(\d+)\s*(?:players?|people)', query_lower)
+    if player_match:
+        filters['num_players'] = int(player_match.group(1))
+        interpretation_parts.append(f"{player_match.group(1)} players")
+    
+    interpretation = f"Fallback parsing: {', '.join(interpretation_parts)}" if interpretation_parts else "General recommendations"
+    
+    return filters, interpretation
 
 
 @app.get("/recommendations", response_model=RecommendationResponse, tags=["Recommendations"])
-async def get_recommendations_get(
+async def get_recommendations(
     num_players: Optional[int] = Query(None, ge=1, le=20, description="Number of players"),
     duration_min: Optional[int] = Query(None, ge=1, description="Minimum play time in minutes"),
     duration_max: Optional[int] = Query(None, ge=1, description="Maximum play time in minutes"),
@@ -334,57 +309,111 @@ async def get_recommendations_get(
     system: RecommendationSystem = Depends(get_recommendation_system)
 ):
     """
-    Get board game recommendations using query parameters (alternative to POST).
+    Get board game recommendations using specific filter parameters.
     
-    This is a convenience endpoint that accepts parameters via URL query string
-    instead of a JSON request body. Useful for simple requests and testing.
+    Filter games by player count, duration, complexity, rating, and age.
+    Perfect for when you know exactly what criteria you want.
     
-    For more complex filtering (including mechanics and domains), use the POST endpoint.
+    Example: `/recommendations?num_players=4&duration_max=90&complexity_max=2.5&min_rating=7.0`
     """
     try:
-        # Create request object
-        request = RecommendationRequest(
-            num_players=num_players,
-            duration_min=duration_min,
-            duration_max=duration_max,
-            complexity_min=complexity_min,
-            complexity_max=complexity_max,
-            min_rating=min_rating,
-            max_age=max_age,
+        # Prepare filters
+        filters = {}
+        if num_players is not None:
+            filters['num_players'] = num_players
+        if duration_min is not None:
+            filters['duration_min'] = duration_min
+        if duration_max is not None:
+            filters['duration_max'] = duration_max
+        if complexity_min is not None:
+            filters['complexity_min'] = complexity_min
+        if complexity_max is not None:
+            filters['complexity_max'] = complexity_max
+        if min_rating is not None:
+            filters['min_rating'] = min_rating
+        if max_age is not None:
+            filters['max_age'] = max_age
+        
+        # Get recommendations
+        recommendations = system.recommender.recommend_games(
             n_recommendations=n_recommendations,
-            sort_by=sort_by
+            sort_by=sort_by,
+            **filters
         )
         
-        # Use the POST endpoint logic
-        return await get_recommendations(request, system)
+        if recommendations.empty:
+            raise HTTPException(
+                status_code=404, 
+                detail="No games found matching your criteria. Try relaxing some filters."
+            )
         
+        # Convert to response format
+        games = [convert_game_to_info(row) for _, row in recommendations.iterrows()]
+        
+        return RecommendationResponse(
+            games=games,
+            total_found=len(games)
+        )
+        
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error in GET recommendations: {e}")
+        logger.error(f"Error getting recommendations: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/similar", response_model=SimilarGamesResponse, tags=["Recommendations"])
-async def get_similar_games_get(
-    game_name: str = Query(..., description="Name of the game to find similar games for"),
-    n_recommendations: int = Query(10, ge=1, le=50, description="Number of similar games"),
+@app.get("/query", response_model=RecommendationResponse, tags=["Recommendations"])
+async def get_recommendations_by_query(
+    q: str = Query(..., description="Natural language query (e.g., 'strategic easy game for 3 players')"),
     system: RecommendationSystem = Depends(get_recommendation_system)
 ):
     """
-    Find similar games using query parameters (alternative to POST).
+    Get board game recommendations using natural language queries.
     
-    This is a convenience endpoint that accepts parameters via URL query string
-    instead of a JSON request body.
+    Describe what you want in plain English and get relevant recommendations.
+    The system will interpret your query and convert it to appropriate filters.
+    
+    ### Example queries:
+    - "strategic easy game for 3 players"
+    - "quick party game for 6 people"
+    - "complex strategy game under 90 minutes"
+    - "family friendly game for 4 players"
+    - "cooperative game with dice rolling"
+    - "card game for 2 players, not too difficult"
+    
+    ### Supported concepts:
+    - **Player count**: "3 players", "for 4", "6 people"
+    - **Complexity**: "easy", "simple", "complex", "heavy", "medium"
+    - **Duration**: "quick", "30 minutes", "60-90 min", "long"
+    - **Quality**: "good", "highly rated", "best", "top"
+    - **Types**: "strategy", "family", "party", "card", "dice", "cooperative"
     """
     try:
-        request = SimilarGamesRequest(
-            game_name=game_name,
-            n_recommendations=n_recommendations
+        # Parse natural language query using Gemini
+        filters, interpretation = parse_natural_language_query_with_gemini(q)
+        
+        # Get recommendations using parsed filters
+        recommendations = system.recommender.recommend_games(**filters)
+        
+        if recommendations.empty:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No games found matching your query: '{q}'. Try a different description or be less specific."
+            )
+        
+        # Convert to response format
+        games = [convert_game_to_info(row) for _, row in recommendations.iterrows()]
+        
+        return RecommendationResponse(
+            games=games,
+            total_found=len(games),
+            query_interpretation=interpretation
         )
         
-        return await get_similar_games(request, system)
-        
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error in GET similar games: {e}")
+        logger.error(f"Error processing query '{q}': {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
