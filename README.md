@@ -1,183 +1,218 @@
 # AI Board Game Suggester
 
-A Python-based board game recommendation system that helps you discover games based on your preferences.
+A Python-based board game recommendation system powered by Google Gemini AI that helps you discover games based on your preferences.
 
 ## Features
 
 - **Smart Filtering**: Find games based on player count, duration, complexity, and ratings
-- **Similarity Search**: Discover games similar to ones you already love
-- **Rich Dataset**: Powered by BoardGameGeek data with thousands of games
-- **Interactive Interface**: Easy-to-use command-line interface
+- **AI-Powered Queries**: Use natural language to describe what you want (powered by Google Gemini)
+- **Rich Dataset**: Powered by BoardGameGeek data with 20,000+ games
+- **REST API**: Simple API with just 2 endpoints
+- **Fallback Support**: Works even without AI API key using keyword matching
 
-## Phase 1: MVP (Minimum Viable Product) ✅
+## Quick Start
 
-### Completed Features:
-1. **Project Setup**: Proper folder structure and dependency management
-2. **Data Preprocessing**: 
-   - Data cleaning and normalization
-   - One-hot encoding for categories and mechanics
-   - Feature engineering for better recommendations
-3. **Basic Recommendation Logic**:
-   - Filtering-based recommendations
-   - Input: number of players, duration, complexity preferences
-   - Output: top-N matching games with detailed information
+### 1. Clone and Setup
 
-## Installation & Setup
+```bash
+cd ai-boardgame-suggester
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+```
 
-### Prerequisites
-- Python 3.7+
-- pip
+### 2. Configure Gemini API (Optional)
 
-### Quick Start
+1. Get your API key from [Google AI Studio](https://ai.google.dev/)
+2. Copy `.env.example` to `.env`
+3. Add your API key:
 
-1. **Clone and navigate to the project**:
-   ```bash
-   cd ai-boardgame-suggester
-   ```
+```bash
+GEMINI_API_KEY=your_actual_api_key_here
+```
 
-2. **Create virtual environment** (recommended):
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\\Scripts\\activate
-   ```
+### 3. Setup Data
 
-3. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
+```bash
+python setup.py
+```
 
-4. **Set up the system**:
-   ```bash
-   python setup.py
-   ```
+### 4. Start the API
 
-5. **Run the application**:
-   ```bash
-   python src/main.py
-   ```
+```bash
+python run_api.py
+```
+
+The API will be available at:
+- **API**: http://localhost:8000
+- **Documentation**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
+
+## API Endpoints
+
+### 1. Filter-Based Recommendations
+
+**GET** `/recommendations`
+
+Filter games using specific parameters:
+
+```bash
+curl "http://localhost:8000/recommendations?num_players=4&complexity_max=2.5&min_rating=7.0"
+```
+
+**Parameters:**
+- `num_players`: Number of players (1-20)
+- `duration_min/max`: Play time in minutes
+- `complexity_min/max`: Complexity (1.0-5.0)
+- `min_rating`: Minimum BGG rating (0.0-10.0)
+- `max_age`: Maximum recommended age
+- `n_recommendations`: Number of results (1-50)
+- `sort_by`: Sort by "Rating Average", "Complexity Average", "Year Published", or "BGG Rank"
+
+### 2. AI-Powered Natural Language Queries
+
+**GET** `/query`
+
+Describe what you want in plain English:
+
+```bash
+curl "http://localhost:8000/query?q=strategic easy game for 3 players"
+```
+
+**Example Queries:**
+- "I want a strategic but easy game for 3 players"
+- "Find me a quick party game for 6 people under 30 minutes"
+- "Suggest complex strategy games for 2 players with high ratings"
+- "Family-friendly games with dice rolling for 4 players"
+- "Cooperative game that takes about an hour"
+
+## Example Response
+
+```json
+{
+  "games": [
+    {
+      "name": "Wingspan",
+      "year_published": 2019,
+      "min_players": 1,
+      "max_players": 5,
+      "play_time": 70,
+      "min_age": 10,
+      "rating_average": 8.1,
+      "complexity_average": 2.4,
+      "bgg_rank": 15,
+      "mechanics": "Card Drafting, Dice Rolling, Hand Management",
+      "domains": "Strategy Games"
+    }
+  ],
+  "total_found": 10,
+  "query_interpretation": "Looking for strategic, easy games for 3 players"
+}
+```
+
+## How It Works
+
+### AI-Powered Natural Language Processing
+
+When you provide a natural language query like "strategic easy game for 3 players", the system:
+
+1. **Sends to Gemini AI**: Your query is processed by Google's Gemini model
+2. **Extracts Parameters**: AI converts your description into specific filters:
+   - "strategic" → `domains: ["Strategy Games"]`
+   - "easy" → `complexity_max: 2.5`
+   - "3 players" → `num_players: 3`
+3. **Finds Games**: Uses extracted filters to search the database
+4. **Returns Results**: Provides matching games with interpretation
+
+### Fallback System
+
+If no Gemini API key is provided, the system uses keyword-based parsing that still understands basic terms like:
+- Player counts: "3 players", "for 4", "6 people"
+- Complexity: "easy", "complex", "medium"
+- Duration: "quick", "long", specific minutes
+- Types: "strategy", "family", "party"
 
 ## Project Structure
 
 ```
 ai-boardgame-suggester/
-├── data/
-│   └── bgg_dataset.csv          # Board game dataset
 ├── src/
+│   ├── api.py                   # FastAPI REST API with Gemini integration
+│   ├── api_models.py            # API request/response models
 │   ├── data_preprocessor.py     # Data cleaning and preprocessing
-│   ├── recommendation_engine.py # Recommendation algorithms
-│   └── main.py                  # Main application interface
+│   └── recommendation_engine.py # Recommendation algorithms
+├── data/
+│   ├── bgg_dataset.csv          # Board game dataset
+│   └── processed_games.csv      # Preprocessed data
 ├── models/                      # Saved models and preprocessors
+├── .env                         # Environment variables (API keys)
+├── .env.example                 # Environment template
 ├── requirements.txt             # Python dependencies
-├── setup.py                     # Setup script
-└── README.md
+├── setup.py                     # Data setup script
+├── run_api.py                   # API server startup
+├── demo.py                      # Non-interactive demo
+└── test_api.py                  # Simple API tests
 ```
 
-## Usage
+## Testing
 
-### Interactive Mode
-
-Run the main application for an interactive experience:
+### Test the Implementation
 
 ```bash
-python src/main.py
+python test_api.py
 ```
 
-The system provides several options:
-1. **Get personalized recommendations** - Enter your preferences and get tailored suggestions
-2. **Find similar games** - Enter a game name to find similar titles
-3. **Browse mechanics** - See popular game mechanics
-4. **Browse domains** - See available game categories
+### Test with Demo
 
-### Example Preferences
-
-- **Number of players**: 4
-- **Duration**: 60-120 minutes
-- **Complexity**: 2-3.5 (on a 1-5 scale)
-- **Minimum rating**: 7.0
-- **Mechanics**: Card Drafting, Worker Placement
-- **Domains**: Strategy Games
-
-### Sample Output
-
-```
-=== Found 5 Recommendations ===
-
-1. Wingspan (2019)
-   Players: 1-5
-   Time: 70 minutes
-   Age: 10+
-   Rating: 8.1 (Rank #23)
-   Complexity: 2.4/5
-   Mechanics: Card Drafting, End Game Bonuses, Hand Management...
-
-2. Splendor (2014)
-   Players: 2-4
-   Time: 30 minutes
-   Age: 10+
-   Rating: 7.4 (Rank #89)
-   Complexity: 1.8/5
-   Mechanics: Card Drafting, Set Collection, Engine Building...
+```bash
+python demo.py
 ```
 
-## How It Works
+### Manual API Testing
 
-### 1. Data Preprocessing
-- Cleans and normalizes the BoardGameGeek dataset
-- Handles missing values and data type conversions
-- Creates one-hot encoded features for mechanics and domains
-- Normalizes numerical features (ratings, complexity, play time)
-
-### 2. Filtering System
-- Filters games based on user criteria:
-  - Player count compatibility
-  - Duration preferences (min/max)
-  - Complexity range
-  - Minimum rating threshold
-  - Preferred mechanics and domains
-
-### 3. Recommendation Engine
-- **Filtering-based**: Returns games matching user criteria
-- **Similarity-based**: Uses cosine similarity to find games similar to a reference game
-- **Ranking**: Sorts results by rating, popularity, or other metrics
-
-## Dataset
-
-The system uses the BoardGameGeek dataset containing:
-- Game names, years, and basic info
-- Player count ranges and recommended ages
-- Play times and complexity ratings
-- User ratings and rankings
-- Game mechanics and categories
-- Thousands of board games from various genres
-
-## Future Enhancements
-
-- **Collaborative Filtering**: Recommend based on similar users' preferences
-- **Content-Based Filtering**: Enhanced similarity using game descriptions
-- **Hybrid Approaches**: Combine multiple recommendation strategies
-- **Web Interface**: Replace command-line with web-based interface
-- **User Profiles**: Save preferences and recommendation history
-- **Advanced Filters**: Publisher, designer, year ranges, etc.
+1. Start the server: `python run_api.py`
+2. Visit: http://localhost:8000/docs
+3. Try the interactive API documentation
 
 ## Dependencies
 
-- `pandas`: Data manipulation and analysis
-- `scikit-learn`: Machine learning algorithms and preprocessing
-- `numpy`: Numerical computations
+- **pandas**: Data processing
+- **scikit-learn**: ML algorithms and similarity calculations
+- **fastapi**: REST API framework
+- **uvicorn**: ASGI server
+- **google-genai**: Google Gemini AI integration
+- **python-dotenv**: Environment variable management
 
-## License
+## Configuration
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `GEMINI_API_KEY` | - | Your Google Gemini API key |
+| `GEMINI_MODEL` | `gemini-1.5-flash` | Gemini model to use |
+| `GEMINI_TEMPERATURE` | `0.3` | AI creativity (0.0-1.0) |
+
+### Model Options
+
+- `gemini-1.5-flash`: Fast, efficient (recommended)
+- `gemini-1.5-pro`: More capable, slower
+- `gemini-2.0-flash-exp`: Experimental latest model
 
 ## Contributing
 
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
+
+## License
+
+This project is licensed under the MIT License.
 
 ## Acknowledgments
 
-- Data provided by BoardGameGeek community
-- Inspired by the need to discover great board games efficiently
+- Data source: [BoardGameGeek](https://boardgamegeek.com/)
+- AI powered by: [Google Gemini](https://ai.google.dev/)
+- Web framework: [FastAPI](https://fastapi.tiangolo.com/)

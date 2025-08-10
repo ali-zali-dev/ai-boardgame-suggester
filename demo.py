@@ -121,7 +121,8 @@ def run_demo():
         print(f"  {i}. {domain}")
     
     print("\n" + "="*60)
-    print("Demo completed! Run 'python src/main.py' for interactive mode.")
+    print("Demo completed! Use the API at http://localhost:8000 for recommendations.")
+    print("Run 'python run_api.py' to start the API server.")
     print("="*60)
 
 

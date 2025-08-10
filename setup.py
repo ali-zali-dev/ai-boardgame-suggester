@@ -60,14 +60,15 @@ def setup_system():
         n_recommendations=3
     )
     
-    print(f"\\nTest successful! Found {len(test_recommendations)} recommendations.")
+    print(f"Test successful! Found {len(test_recommendations)} recommendations.")
     if not test_recommendations.empty:
         print("Sample recommendation:")
         first_game = test_recommendations.iloc[0]
         print(f"  - {first_game['Name']} (Rating: {first_game['Rating Average']:.1f})")
     
-    print("\\n=== Setup Complete! ===")
-    print("You can now run: python src/main.py")
+    print("=== Setup Complete! ===")
+    print("You can now run: python run_api.py")
+    print("Or try the demo: python demo.py")
     
     return True
 
