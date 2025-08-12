@@ -64,7 +64,7 @@ class BoardGameRecommender:
     
     def filter_games(self, num_players=None, duration_min=None, duration_max=None, 
                     complexity_min=None, complexity_max=None, min_rating=None, 
-                    max_age=None, mechanics=None, domains=None):
+                    max_age=None, year_min=None, year_max=None, mechanics=None, domains=None):
         """
         Filter games based on user criteria.
         
@@ -76,6 +76,8 @@ class BoardGameRecommender:
             complexity_max: Maximum complexity (1-5 scale)
             min_rating: Minimum BGG rating
             max_age: Maximum recommended age
+            year_min: Minimum publication year
+            year_max: Maximum publication year
             mechanics: List of desired mechanics
             domains: List of desired domains
             
@@ -119,6 +121,15 @@ class BoardGameRecommender:
         if max_age is not None:
             df = df[df['Min Age'] <= max_age]
             print(f"  After age filter (≤{max_age}): {len(df)} games")
+        
+        # Filter by publication year
+        if year_min is not None:
+            df = df[df['Year Published'] >= year_min]
+            print(f"  After min year filter ({year_min}+): {len(df)} games")
+            
+        if year_max is not None:
+            df = df[df['Year Published'] <= year_max]
+            print(f"  After max year filter (≤{year_max}): {len(df)} games")
         
         # Filter by mechanics
         if mechanics is not None and len(mechanics) > 0:
@@ -168,8 +179,8 @@ class BoardGameRecommender:
     
     def recommend_games(self, num_players=None, duration_min=None, duration_max=None,
                        complexity_min=None, complexity_max=None, min_rating=None,
-                       max_age=None, mechanics=None, domains=None, n_recommendations=10,
-                       sort_by='Rating Average'):
+                       max_age=None, year_min=None, year_max=None, mechanics=None, domains=None, 
+                       n_recommendations=10, sort_by='Rating Average'):
         """
         Get game recommendations based on filtering criteria.
         
@@ -181,6 +192,8 @@ class BoardGameRecommender:
             complexity_max: Maximum complexity (1-5 scale)
             min_rating: Minimum BGG rating
             max_age: Maximum recommended age
+            year_min: Minimum publication year
+            year_max: Maximum publication year
             mechanics: List of desired mechanics
             domains: List of desired domains
             n_recommendations: Number of recommendations to return
@@ -199,6 +212,8 @@ class BoardGameRecommender:
             complexity_max=complexity_max,
             min_rating=min_rating,
             max_age=max_age,
+            year_min=year_min,
+            year_max=year_max,
             mechanics=mechanics,
             domains=domains
         )
@@ -210,8 +225,15 @@ class BoardGameRecommender:
         # Sort and return top recommendations
         if sort_by in filtered_games.columns:
             # For BGG Rank, lower numbers are better (rank 1 is best), so sort ascending
+            # For Year Published when looking for newest, higher is better, so sort descending
             # For other metrics like Rating Average, higher is better, so sort descending
-            ascending = (sort_by == 'BGG Rank')
+            if sort_by == 'BGG Rank':
+                ascending = True
+            elif sort_by == 'Year Published':
+                # For year, we typically want newest first (descending)
+                ascending = False
+            else:
+                ascending = False
             filtered_games = filtered_games.sort_values(by=sort_by, ascending=ascending)
         
         recommendations = filtered_games.head(n_recommendations)

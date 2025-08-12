@@ -195,6 +195,8 @@ Please respond with ONLY a valid JSON object containing the extracted filters. U
   "complexity_max": float (1.0-5.0) or null,
   "min_rating": float (0.0-10.0) or null,
   "max_age": integer or null,
+  "year_min": integer or null,
+  "year_max": integer or null,
   "mechanics": array of strings or null,
   "domains": array of strings or null,
   "n_recommendations": integer (default 10),
@@ -207,6 +209,8 @@ Guidelines:
 - For duration: quick/fast/short = max 45min, long = min 90min
 - For rating: good/popular = min 7.0, best/top/excellent = min 8.0
 - For "best" queries: use sort_by "BGG Rank" (rank 1 is best game) AND min_rating 8.0
+- For "newest/new/recent" queries: use sort_by "Year Published" AND set minimum year (e.g., 2020+)
+- For "old/classic/vintage" queries: use sort_by "Year Published" AND set maximum year (e.g., before 2010)
 - Common domains: "Strategy Games", "Family Games", "Party Games", "Thematic Games"
 - Common mechanics: "Dice Rolling", "Hand Management", "Worker Placement", "Card Drafting", "Cooperative Game"
 - Set num_players to the exact number mentioned (e.g., "3 players" = 3)
@@ -289,6 +293,18 @@ def parse_natural_language_query_fallback(query: str) -> tuple[dict, str]:
         filters['sort_by'] = 'BGG Rank'
         filters['min_rating'] = 8.0
         interpretation_parts.append("best games")
+    
+    # Handle "newest" queries by using year sorting and recent year filter
+    if any(word in query_lower for word in ['newest', 'new', 'recent', 'latest', 'modern']):
+        filters['sort_by'] = 'Year Published'
+        filters['year_min'] = 2020
+        interpretation_parts.append("newest games")
+    
+    # Handle "old" queries by using year sorting and older year filter
+    if any(word in query_lower for word in ['old', 'classic', 'vintage', 'retro', 'older']):
+        filters['sort_by'] = 'Year Published'
+        filters['year_max'] = 2010
+        interpretation_parts.append("classic games")
         
     # Extract player count
     import re
@@ -311,6 +327,8 @@ async def get_recommendations(
     complexity_max: Optional[float] = Query(None, ge=1.0, le=5.0, description="Maximum complexity (1-5)"),
     min_rating: Optional[float] = Query(None, ge=0.0, le=10.0, description="Minimum BGG rating"),
     max_age: Optional[int] = Query(None, ge=1, le=99, description="Maximum recommended age"),
+    year_min: Optional[int] = Query(None, ge=1900, le=2030, description="Minimum publication year"),
+    year_max: Optional[int] = Query(None, ge=1900, le=2030, description="Maximum publication year"),
     n_recommendations: int = Query(10, ge=1, le=50, description="Number of recommendations"),
     sort_by: SortOption = Query(SortOption.rating, description="Sort recommendations by"),
     system: RecommendationSystem = Depends(get_recommendation_system)
@@ -318,10 +336,13 @@ async def get_recommendations(
     """
     Get board game recommendations using specific filter parameters.
     
-    Filter games by player count, duration, complexity, rating, and age.
+    Filter games by player count, duration, complexity, rating, age, and publication year.
     Perfect for when you know exactly what criteria you want.
     
-    Example: `/recommendations?num_players=4&duration_max=90&complexity_max=2.5&min_rating=7.0`
+    Examples: 
+    - `/recommendations?num_players=4&duration_max=90&complexity_max=2.5&min_rating=7.0`
+    - `/recommendations?year_min=2020&sort_by=year` (newest games)
+    - `/recommendations?sort_by=rank&min_rating=8.0` (best games)
     """
     try:
         # Prepare filters
@@ -340,6 +361,10 @@ async def get_recommendations(
             filters['min_rating'] = min_rating
         if max_age is not None:
             filters['max_age'] = max_age
+        if year_min is not None:
+            filters['year_min'] = year_min
+        if year_max is not None:
+            filters['year_max'] = year_max
         
         # Get recommendations
         recommendations = system.recommender.recommend_games(
@@ -387,12 +412,16 @@ async def get_recommendations_by_query(
     - "family friendly game for 4 players"
     - "cooperative game with dice rolling"
     - "card game for 2 players, not too difficult"
+    - "best strategy games for 2 players"
+    - "newest family games"
+    - "classic games for 4 players"
     
     ### Supported concepts:
     - **Player count**: "3 players", "for 4", "6 people"
     - **Complexity**: "easy", "simple", "complex", "heavy", "medium"
     - **Duration**: "quick", "30 minutes", "60-90 min", "long"
     - **Quality**: "good", "highly rated", "best", "top"
+    - **Age**: "newest", "new", "recent", "old", "classic", "vintage"
     - **Types**: "strategy", "family", "party", "card", "dice", "cooperative"
     """
     try:
