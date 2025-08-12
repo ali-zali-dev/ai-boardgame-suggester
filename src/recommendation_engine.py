@@ -209,7 +209,10 @@ class BoardGameRecommender:
         
         # Sort and return top recommendations
         if sort_by in filtered_games.columns:
-            filtered_games = filtered_games.sort_values(by=sort_by, ascending=False)
+            # For BGG Rank, lower numbers are better (rank 1 is best), so sort ascending
+            # For other metrics like Rating Average, higher is better, so sort descending
+            ascending = (sort_by == 'BGG Rank')
+            filtered_games = filtered_games.sort_values(by=sort_by, ascending=ascending)
         
         recommendations = filtered_games.head(n_recommendations)
         

@@ -206,6 +206,7 @@ Guidelines:
 - For complexity: easy/simple/light = max 2.5, medium = 2.0-3.5, complex/heavy = min 3.5
 - For duration: quick/fast/short = max 45min, long = min 90min
 - For rating: good/popular = min 7.0, best/top/excellent = min 8.0
+- For "best" queries: use sort_by "BGG Rank" (rank 1 is best game) AND min_rating 8.0
 - Common domains: "Strategy Games", "Family Games", "Party Games", "Thematic Games"
 - Common mechanics: "Dice Rolling", "Hand Management", "Worker Placement", "Card Drafting", "Cooperative Game"
 - Set num_players to the exact number mentioned (e.g., "3 players" = 3)
@@ -282,6 +283,12 @@ def parse_natural_language_query_fallback(query: str) -> tuple[dict, str]:
     if any(word in query_lower for word in ['quick', 'fast', 'short']):
         filters['duration_max'] = 45
         interpretation_parts.append("quick games")
+    
+    # Handle "best" queries by using BGG rank sorting and high rating filter
+    if any(word in query_lower for word in ['best', 'top', 'highest', 'ranked']):
+        filters['sort_by'] = 'BGG Rank'
+        filters['min_rating'] = 8.0
+        interpretation_parts.append("best games")
         
     # Extract player count
     import re
