@@ -50,3 +50,6 @@ Thumbs.db
 
 # Models (if large)
 # models/*.pkl
+
+# Vector database
+chroma_db/

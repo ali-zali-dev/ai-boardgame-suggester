@@ -1,40 +1,55 @@
-#!/usr/bin/env python3
 """
-Startup script for the Board Game Recommendation API.
-Runs the FastAPI server with uvicorn.
+Main runner for the RAG-based board game recommendation API.
 """
 
 import uvicorn
-import sys
 import os
+import sys
+from dotenv import load_dotenv
 
-# Add src to Python path
-sys.path.insert(0, 'src')
+# Load environment variables
+load_dotenv()
 
-def main():
-    """Run the FastAPI application."""
-    print("🎲 Starting Board Game Recommendation API...")
-    print("📊 Initializing recommendation system (this may take a moment)...")
-    print("🚀 API will be available at: http://localhost:8000")
-    print("📚 Swagger documentation: http://localhost:8000/docs")
-    print("📖 ReDoc documentation: http://localhost:8000/redoc")
-    print("\nPress Ctrl+C to stop the server")
-    print("-" * 60)
-    
-    try:
-        uvicorn.run(
-            "src.api:app",
-            host="0.0.0.0",
-            port=8000,
-            reload=True,
-            reload_dirs=["src"],
-            log_level="info"
-        )
-    except KeyboardInterrupt:
-        print("\n🛑 Server stopped by user")
-    except Exception as e:
-        print(f"\n❌ Error starting server: {e}")
-        sys.exit(1)
+# Add src to path
+sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
+
+from src.rag_api import app
 
 if __name__ == "__main__":
-    main()
+    # Check for API keys
+    has_gemini = bool(os.getenv("GEMINI_API_KEY"))
+    has_openai = bool(os.getenv("OPENAI_API_KEY"))
+    
+    if not has_gemini and not has_openai:
+        print("ERROR: No LLM API key found!")
+        print("Please set one of these in your .env file:")
+        print("  - GEMINI_API_KEY for Gemini (recommended)")
+        print("  - OPENAI_API_KEY for OpenAI")
+        print("\nGet a free Gemini API key from: https://aistudio.google.com/app/apikey")
+        print("Example .env file:")
+        print("  GEMINI_API_KEY=your-gemini-api-key-here")
+        print("  LLM_PROVIDER=gemini")
+        sys.exit(1)
+    
+    # Show which provider will be used
+    provider = os.getenv("LLM_PROVIDER", "gemini").lower()
+    print(f"Starting Board Game RAG API with {provider.upper()} provider...")
+    print("API Documentation available at: http://localhost:8000/docs")
+    print("Health check available at: http://localhost:8000/health")
+    
+    if has_gemini and provider == "gemini":
+        print("✅ Using Gemini (Google AI)")
+    elif has_openai and provider == "openai":
+        print("✅ Using OpenAI")
+    elif has_gemini:
+        print("✅ Using Gemini (Google AI) as fallback")
+    elif has_openai:
+        print("✅ Using OpenAI as fallback")
+    
+    uvicorn.run(
+        "src.rag_api:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=False,
+        log_level="info"
+    )
