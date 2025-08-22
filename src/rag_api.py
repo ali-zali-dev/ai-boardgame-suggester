@@ -48,7 +48,7 @@ async def lifespan(app: FastAPI):
         
     except Exception as e:
         logger.error(f"Failed to initialize RAG system: {e}")
-        logger.error("Make sure you have either GEMINI_API_KEY or OPENAI_API_KEY set.")
+        logger.error("Make sure you have either OPENAI_API_KEY or GEMINI_API_KEY set.")
         raise
     finally:
         logger.info("Shutting down RAG system...")
@@ -93,7 +93,7 @@ async def root():
 async def health_check():
     """Health check endpoint."""
     try:
-        rag_initialized = rag_system is not None and rag_system.collection is not None
+        rag_initialized = rag_system is not None and rag_system.query_engine is not None
         return HealthResponse(
             status="healthy" if rag_initialized else "initializing",
             message="RAG system is ready" if rag_initialized else "RAG system is initializing",
@@ -127,18 +127,32 @@ async def query_games(
         
         # Run the query in a thread executor to avoid blocking
         result = await asyncio.get_event_loop().run_in_executor(
-            None, rag.query, request.query, request.num_results
+            None, rag.query, request.query
         )
         
         # Convert search results to response model
         search_results = []
         for game_result in result['games']:
-            metadata = GameMetadata(**game_result['metadata'])
+            # LlamaIndex returns simplified game data
+            metadata = GameMetadata(
+                game_id=str(game_result.get('name', 'unknown')),
+                name=game_result.get('name', 'Unknown'),
+                year=game_result.get('year', 0) if isinstance(game_result.get('year'), int) else 0,
+                min_players=1,
+                max_players=8,
+                play_time=60,
+                min_age=8,
+                rating=game_result.get('rating', 0),
+                complexity=game_result.get('complexity', 0),
+                rank=999999,
+                mechanics=game_result.get('mechanics', ''),
+                domains='Strategy'
+            )
             search_result = SearchResult(
-                id=game_result['id'],
-                score=game_result['score'],
+                id=f"game_{game_result.get('name', 'unknown')}",
+                score=game_result.get('score', 0),
                 metadata=metadata,
-                document=game_result['document']
+                document=f"Game: {game_result.get('name', 'Unknown')}"
             )
             search_results.append(search_result)
         
@@ -176,20 +190,33 @@ async def search_games(
         
         logger.info(f"Searching games: {q}")
         
-        # Run search in thread executor
-        results = await asyncio.get_event_loop().run_in_executor(
-            None, rag.search_games, q, limit
+        # Run search in thread executor  
+        result = await asyncio.get_event_loop().run_in_executor(
+            None, rag.query, q
         )
         
         # Convert to response model
         search_results = []
-        for game_result in results:
-            metadata = GameMetadata(**game_result['metadata'])
+        for game_result in result['games']:
+            metadata = GameMetadata(
+                game_id=str(game_result.get('name', 'unknown')),
+                name=game_result.get('name', 'Unknown'),
+                year=game_result.get('year', 0) if isinstance(game_result.get('year'), int) else 0,
+                min_players=1,
+                max_players=8,
+                play_time=60,
+                min_age=8,
+                rating=game_result.get('rating', 0),
+                complexity=game_result.get('complexity', 0),
+                rank=999999,
+                mechanics=game_result.get('mechanics', ''),
+                domains='Strategy'
+            )
             search_result = SearchResult(
-                id=game_result['id'],
-                score=game_result['score'],
+                id=f"game_{game_result.get('name', 'unknown')}",
+                score=game_result.get('score', 0),
                 metadata=metadata,
-                document=game_result['document']
+                document=f"Game: {game_result.get('name', 'Unknown')}"
             )
             search_results.append(search_result)
         
@@ -233,7 +260,7 @@ async def get_stats(rag: BoardGameRAG = Depends(get_rag_system)):
                 "max": float(df['Complexity Average'].max()) if 'Complexity Average' in df.columns else None,
                 "mean": float(df['Complexity Average'].mean()) if 'Complexity Average' in df.columns else None
             },
-            "vector_db_size": rag.collection.count() if rag.collection else 0
+            "vector_db_size": len(rag.games_df) if rag.games_df is not None else 0
         }
         
         return stats

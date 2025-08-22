@@ -17,13 +17,13 @@ from src.rag_api import app
 
 if __name__ == "__main__":
     # Check for API keys
-    has_gemini = bool(os.getenv("GEMINI_API_KEY"))
+    has_gemini = bool(os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
     has_openai = bool(os.getenv("OPENAI_API_KEY"))
     
     if not has_gemini and not has_openai:
         print("ERROR: No LLM API key found!")
         print("Please set one of these in your .env file:")
-        print("  - GEMINI_API_KEY for Gemini (recommended)")
+        print("  - GEMINI_API_KEY (or GOOGLE_API_KEY) for Gemini (recommended)")
         print("  - OPENAI_API_KEY for OpenAI")
         print("\nGet a free Gemini API key from: https://aistudio.google.com/app/apikey")
         print("Example .env file:")

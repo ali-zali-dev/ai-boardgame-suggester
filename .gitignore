@@ -53,3 +53,4 @@ Thumbs.db
 
 # Vector database
 chroma_db/
+embeddings_cache/
