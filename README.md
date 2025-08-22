@@ -104,7 +104,7 @@ This will:
 Start the FastAPI server:
 
 ```bash
-python run_api.py
+python main.py
 ```
 
 The API will be available at:
@@ -206,7 +206,7 @@ ai-boardgame-suggester/
 │   ├── rag_models.py           # Pydantic models
 │   └── llm_providers.py        # LLM provider abstraction
 ├── chroma_db/                  # Vector database (created on first run)
-├── run_api.py                  # API server launcher
+├── main.py                     # API server launcher
 ├── demo_rag.py                 # Interactive demo
 ├── test_providers.py           # Test LLM providers
 ├── requirements.txt            # Python dependencies

@@ -80,7 +80,7 @@ This will:
 ### 5. Start the API Server
 
 ```bash
-python run_api.py
+python main.py
 ```
 
 The API will be available at:
@@ -218,7 +218,7 @@ ai-boardgame-suggester/
 │   ├── rag_models.py           # Pydantic models
 │   └── llm_providers.py        # LLM provider abstraction
 ├── chroma_db/                  # Vector database (created automatically)
-├── run_api.py                  # API server launcher
+├── main.py                     # API server launcher
 ├── demo_rag.py                 # Interactive demo
 ├── test_providers.py           # Test your API keys
 ├── requirements.txt            # Dependencies

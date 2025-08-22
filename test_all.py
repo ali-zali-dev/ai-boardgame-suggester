@@ -389,7 +389,7 @@ def main():
         print("\n🎉 ALL TESTS PASSED! Your RAG system is working correctly.")
         print("\nNext steps:")
         print("  1. Run: python demo_rag.py")
-        print("  2. Or run: python run_api.py")
+        print("  2. Or run: python main.py")
     elif results['providers']:
         print("\n⚠️  System partially working. You can still use basic functionality.")
         print("\nTroubleshooting for failed tests:")

@@ -67,7 +67,7 @@ def setup_system():
         print(f"  - {first_game['Name']} (Rating: {first_game['Rating Average']:.1f})")
     
     print("=== Setup Complete! ===")
-    print("You can now run: python run_api.py")
+    print("You can now run: python main.py")
     print("Or try the demo: python demo.py")
     
     return True
