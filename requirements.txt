@@ -9,15 +9,15 @@ pydantic>=2.0.0
 # LlamaIndex RAG Framework (replaces chromadb + sentence-transformers)
 llama-index>=0.10.0
 
-# LLM Integrations
-llama-index-llms-openai>=0.1.0
+# LLM Integrations (Gemini only)
+# llama-index-llms-openai>=0.1.0      # COMMENTED OUT - OpenAI not needed
 llama-index-llms-gemini>=0.1.0
 
 # Lightweight Embeddings (replaces heavy sentence-transformers)
 llama-index-embeddings-huggingface>=0.2.0
 
-# Optional: Agents for advanced workflows
-llama-index-agent-openai>=0.2.0
+# Optional: Agents for advanced workflows (OpenAI removed)
+# llama-index-agent-openai>=0.2.0     # COMMENTED OUT - OpenAI not needed
 
 # REMOVED HEAVY PACKAGES (saved ~6.5GB):
 # chromadb>=0.4.0                    # ~200MB - replaced by llama-index

@@ -16,15 +16,14 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 from src.rag_api import app
 
 if __name__ == "__main__":
-    # Check for API keys
+    # Check for API keys (Gemini only)
     has_gemini = bool(os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
-    has_openai = bool(os.getenv("OPENAI_API_KEY"))
+    # has_openai = bool(os.getenv("OPENAI_API_KEY"))  # COMMENTED OUT - OpenAI not needed
     
-    if not has_gemini and not has_openai:
-        print("ERROR: No LLM API key found!")
-        print("Please set one of these in your .env file:")
-        print("  - GEMINI_API_KEY (or GOOGLE_API_KEY) for Gemini (recommended)")
-        print("  - OPENAI_API_KEY for OpenAI")
+    if not has_gemini:
+        print("ERROR: No Gemini API key found!")
+        print("Please set this in your .env file:")
+        print("  - GEMINI_API_KEY (or GOOGLE_API_KEY) for Gemini")
         print("\nGet a free Gemini API key from: https://aistudio.google.com/app/apikey")
         print("Example .env file:")
         print("  GEMINI_API_KEY=your-gemini-api-key-here")
@@ -39,12 +38,12 @@ if __name__ == "__main__":
     
     if has_gemini and provider == "gemini":
         print("✅ Using Gemini (Google AI)")
-    elif has_openai and provider == "openai":
-        print("✅ Using OpenAI")
+    # elif has_openai and provider == "openai":  # COMMENTED OUT - OpenAI not needed
+    #     print("✅ Using OpenAI")
     elif has_gemini:
         print("✅ Using Gemini (Google AI) as fallback")
-    elif has_openai:
-        print("✅ Using OpenAI as fallback")
+    # elif has_openai:  # COMMENTED OUT - OpenAI not needed
+    #     print("✅ Using OpenAI as fallback")
     
     uvicorn.run(
         "src.rag_api:app",

@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 from llama_index.core import VectorStoreIndex, Document, Settings
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-from llama_index.llms.openai import OpenAI
+# from llama_index.llms.openai import OpenAI  # COMMENTED OUT - OpenAI not needed
 from llama_index.llms.gemini import Gemini
 
 # Load environment variables
@@ -27,7 +27,7 @@ class BoardGameRAG:
         Initialize the RAG system with LlamaIndex.
         
         Args:
-            provider_name: LLM provider to use ("openai", "gemini", or None for auto-detect)
+            provider_name: LLM provider to use ("gemini" only - OpenAI commented out, or None for auto-detect)
         """
         # Initialize LLM provider
         self.llm = self._initialize_llm(provider_name)
@@ -50,19 +50,18 @@ class BoardGameRAG:
         print(f"✅ LlamaIndex RAG initialized with {type(self.llm).__name__}")
     
     def _initialize_llm(self, provider_name: Optional[str] = None) -> Any:
-        """Initialize LLM provider with auto-detection."""
-        # Check environment variables
-        has_openai = bool(os.getenv("OPENAI_API_KEY"))
+        """Initialize LLM provider with auto-detection (Gemini only)."""
+        # Check environment variables (Gemini only)
+        # has_openai = bool(os.getenv("OPENAI_API_KEY"))  # COMMENTED OUT - OpenAI not needed
         has_gemini = bool(os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
         
-        if not has_openai and not has_gemini:
+        if not has_gemini:
             raise ValueError(
-                "No LLM API key found! Please set either:\n"
-                "- OPENAI_API_KEY for OpenAI\n"
+                "No Gemini API key found! Please set:\n"
                 "- GEMINI_API_KEY (or GOOGLE_API_KEY) for Gemini"
             )
         
-        # Use specified provider or auto-detect
+        # Use specified provider or auto-detect (Gemini only)
         preferred_provider = provider_name or os.getenv("LLM_PROVIDER", "gemini").lower()
         
         if preferred_provider == "gemini" and has_gemini:
@@ -70,17 +69,17 @@ class BoardGameRAG:
                 model="models/gemini-1.5-flash",
                 api_key=os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
             )
-        elif preferred_provider == "openai" and has_openai:
-            return OpenAI(model="gpt-3.5-turbo", temperature=0.7)
+        # elif preferred_provider == "openai" and has_openai:  # COMMENTED OUT - OpenAI not needed
+        #     return OpenAI(model="gpt-3.5-turbo", temperature=0.7)
         elif has_gemini:
             return Gemini(
                 model="models/gemini-1.5-flash",
                 api_key=os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
             )
-        elif has_openai:
-            return OpenAI(model="gpt-3.5-turbo", temperature=0.7)
+        # elif has_openai:  # COMMENTED OUT - OpenAI not needed
+        #     return OpenAI(model="gpt-3.5-turbo", temperature=0.7)
         else:
-            raise ValueError("No compatible LLM provider available")
+            raise ValueError("No Gemini provider available")
     
     def load_and_process_data(self, csv_path: str) -> None:
         """Load board game data and create LlamaIndex documents."""

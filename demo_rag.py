@@ -19,15 +19,14 @@ from src.rag_engine import BoardGameRAG
 async def main():
     """Demo the RAG system with example queries."""
     
-    # Check for API keys
+    # Check for API keys (Gemini only)
     has_gemini = bool(os.getenv("GEMINI_API_KEY"))
-    has_openai = bool(os.getenv("OPENAI_API_KEY"))
+    # has_openai = bool(os.getenv("OPENAI_API_KEY"))  # COMMENTED OUT - OpenAI not needed
     
-    if not has_gemini and not has_openai:
-        print("ERROR: No LLM API key found!")
-        print("Please set one of these in your .env file:")
-        print("  - GEMINI_API_KEY for Gemini (recommended)")
-        print("  - OPENAI_API_KEY for OpenAI")
+    if not has_gemini:
+        print("ERROR: No Gemini API key found!")
+        print("Please set this in your .env file:")
+        print("  - GEMINI_API_KEY for Gemini")
         print("\nGet a free Gemini API key from: https://aistudio.google.com/app/apikey")
         return
     
